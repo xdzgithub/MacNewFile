@@ -12,6 +12,7 @@
 - (BOOL)menuKindRepresentsSelection:(FIMenuKind)kind;
 - (NSArray<NSString *> *)pathsForMenuKind:(FIMenuKind)kind;
 - (void)updateDirectoryURLs;
+- (void)revealAndRenameURL:(NSURL *)fileURL;
 @end
 
 @implementation FinderSync
@@ -180,6 +181,27 @@
     return menu;
 }
 
+// Reveal the new file and start renaming it, like Finder's own "New Folder".
+// The reveal selects the file, so Shift+Return opens its rename field; plain
+// Return would open the document instead.
+- (void)revealAndRenameURL:(NSURL *)fileURL {
+    [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[fileURL]];
+
+    // The reveal is asynchronous and the script sleeps, so keep it off the main
+    // thread. Needs Automation/Accessibility permission; without it the file
+    // stays selected and can be renamed manually.
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSString *source = @"delay 0.8\n"
+                            "tell application \"System Events\" to keystroke return using shift down";
+        NSAppleScript *script = [[NSAppleScript alloc] initWithSource:source];
+        NSDictionary *errorDict = nil;
+        [script executeAndReturnError:&errorDict];
+        if (errorDict) {
+            NSLog(@"Failed to start renaming: %@", errorDict);
+        }
+    });
+}
+
 - (FIMenuKind)menuKindForSender:(id)sender {
     // Only tag survives Finder's copy of the menu, so the menu kind is
     // recovered from it. tag is biased by one because 0 is the default.
@@ -335,8 +357,7 @@
         NSLog(@"Failed to create Word document: %@", errorDict);
     } else {
         NSLog(@"Created: %@", filePath);
-        NSURL *fileURL = [NSURL fileURLWithPath:filePath];
-        [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[fileURL]];
+        [self revealAndRenameURL:[NSURL fileURLWithPath:filePath]];
     }
 }
 
@@ -390,8 +411,7 @@
         NSLog(@"Failed to create Excel document: %@", errorDict);
     } else {
         NSLog(@"Created: %@", filePath);
-        NSURL *fileURL = [NSURL fileURLWithPath:filePath];
-        [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[fileURL]];
+        [self revealAndRenameURL:[NSURL fileURLWithPath:filePath]];
     }
 }
 
@@ -443,8 +463,7 @@
         NSLog(@"Failed to create PowerPoint document: %@", errorDict);
     } else {
         NSLog(@"Created: %@", filePath);
-        NSURL *fileURL = [NSURL fileURLWithPath:filePath];
-        [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[fileURL]];
+        [self revealAndRenameURL:[NSURL fileURLWithPath:filePath]];
     }
 }
 
@@ -495,8 +514,7 @@
         NSLog(@"Failed to create Pages document: %@", errorDict);
     } else {
         NSLog(@"Created: %@", filePath);
-        NSURL *fileURL = [NSURL fileURLWithPath:filePath];
-        [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[fileURL]];
+        [self revealAndRenameURL:[NSURL fileURLWithPath:filePath]];
     }
 }
 
@@ -547,8 +565,7 @@
         NSLog(@"Failed to create Numbers document: %@", errorDict);
     } else {
         NSLog(@"Created: %@", filePath);
-        NSURL *fileURL = [NSURL fileURLWithPath:filePath];
-        [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[fileURL]];
+        [self revealAndRenameURL:[NSURL fileURLWithPath:filePath]];
     }
 }
 
@@ -599,8 +616,7 @@
         NSLog(@"Failed to create Keynote document: %@", errorDict);
     } else {
         NSLog(@"Created: %@", filePath);
-        NSURL *fileURL = [NSURL fileURLWithPath:filePath];
-        [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[fileURL]];
+        [self revealAndRenameURL:[NSURL fileURLWithPath:filePath]];
     }
 }
 
@@ -650,8 +666,7 @@
         NSLog(@"Failed: %@", errorDict);
     } else {
         NSLog(@"Created: %@", filePath);
-        NSURL *fileURL = [NSURL fileURLWithPath:filePath];
-        [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[fileURL]];
+        [self revealAndRenameURL:[NSURL fileURLWithPath:filePath]];
     }
 }
 
