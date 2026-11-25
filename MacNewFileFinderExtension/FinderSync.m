@@ -187,17 +187,41 @@
 - (void)revealAndRenameURL:(NSURL *)fileURL {
     [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[fileURL]];
 
-    // The reveal is asynchronous and the script sleeps, so keep it off the main
-    // thread. Needs Automation/Accessibility permission; without it the file
-    // stays selected and can be renamed manually.
+    // The reveal is asynchronous, so poll until Finder actually reports the new
+    // file as selected before sending the keystroke; a fixed sleep raced the
+    // reveal and sent the keystroke into the void. The script needs
+    // Automation/Accessibility permission; without it the file stays selected
+    // and can be renamed manually. The result (or TCC error code) is logged so
+    // failures are diagnosable instead of silent.
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        NSString *source = @"delay 0.8\n"
-                            "tell application \"System Events\" to keystroke return using shift down";
+        NSString *fileName = fileURL.lastPathComponent;
+        NSString *escaped = [fileName stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
+        escaped = [escaped stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
+
+        NSString *source = [NSString stringWithFormat:
+            @"tell application \"Finder\" to activate\n"
+            "set ok to false\n"
+            "repeat 20 times\n"
+            "  delay 0.15\n"
+            "  try\n"
+            "    if (name of item 1 of (get selection) as text) is \"%@\" then\n"
+            "      set ok to true\n"
+            "      exit repeat\n"
+            "    end if\n"
+            "  end try\n"
+            "end repeat\n"
+            "if not ok then return \"no-selection\"\n"
+            "tell application \"System Events\" to keystroke return using shift down\n"
+            "return \"sent\"", escaped];
+
         NSAppleScript *script = [[NSAppleScript alloc] initWithSource:source];
         NSDictionary *errorDict = nil;
-        [script executeAndReturnError:&errorDict];
+        NSAppleEventDescriptor *result = [script executeAndReturnError:&errorDict];
         if (errorDict) {
-            NSLog(@"Failed to start renaming: %@", errorDict);
+            NSLog(@"Failed to start renaming (%@): %@",
+                  [errorDict objectForKey:@"ErrorNumber"] ?: @"unknown", errorDict);
+        } else {
+            NSLog(@"Rename keystroke: %@", result.stringValue);
         }
     });
 }
