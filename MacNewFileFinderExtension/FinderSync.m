@@ -110,16 +110,20 @@
 
 - (NSMenu *)menuForMenuKind:(FIMenuKind)whichMenu {
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@""];
+    // Automatic enabling validates every item through validateMenuItem:. The
+    // "New File" parent has no action, so validation would disable it, and
+    // Finder closes the whole menu when a disabled submenu parent is clicked.
+    // Keep the items enabled exactly as set here instead.
+    menu.autoenablesItems = NO;
 
     // The menu kind is stashed on each item so the actions can tell whether
     // they were invoked on selected items or on the container background.
     // tag is biased by one because 0 is NSMenuItem's default tag.
-    NSNumber *menuKind = @(whichMenu);
     NSInteger menuKindTag = (NSInteger)whichMenu + 1;
 
     // Add "Copy Path" menu item
     NSMenuItem *copyPathItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Copy Path", nil) action:@selector(copyPathToClipboard:) keyEquivalent:@""];
-    copyPathItem.representedObject = menuKind;
+    copyPathItem.target = self;
     copyPathItem.tag = menuKindTag;
     NSImage *copyIcon = [NSImage imageNamed:@"copy"];
     copyIcon.template = YES;
@@ -128,7 +132,7 @@
 
     // Add "Open Terminal" menu item
     NSMenuItem *openTerminalItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Open New Terminal", nil) action:@selector(openTerminalAtPath:) keyEquivalent:@""];
-    openTerminalItem.representedObject = menuKind;
+    openTerminalItem.target = self;
     openTerminalItem.tag = menuKindTag;
     NSImage *terminalIcon = [NSImage imageNamed:@"terminal"];
     terminalIcon.template = YES;
@@ -137,68 +141,41 @@
 
     // Create submenu for New File options
     NSMenu *submenu = [[NSMenu alloc] initWithTitle:@""];
+    submenu.autoenablesItems = NO;
 
-    // Add "New Text File" to submenu
-    NSMenuItem *newTextItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Text File", nil) action:@selector(createNewTextFile:) keyEquivalent:@""];
-    NSImage *textIcon = [NSImage imageNamed:@"edit"];
-    textIcon.template = YES;
-    newTextItem.image = textIcon;
-    [submenu addItem:newTextItem];
+    // Each entry is title, action, and asset-catalog icon name.
+    NSArray<NSArray<NSString *> *> *fileTypes = @[
+        @[NSLocalizedString(@"Text File", nil), NSStringFromSelector(@selector(createNewTextFile:)), @"edit"],
+        @[NSLocalizedString(@"Markdown File", nil), NSStringFromSelector(@selector(createNewMarkdownFile:)), @"document"],
+        @[NSLocalizedString(@"Microsoft Word Document", nil), NSStringFromSelector(@selector(createNewWordDocument:)), @"word"],
+        @[NSLocalizedString(@"Microsoft Excel Spreadsheet", nil), NSStringFromSelector(@selector(createNewExcelDocument:)), @"excel"],
+        @[NSLocalizedString(@"Microsoft PowerPoint Presentation", nil), NSStringFromSelector(@selector(createNewPowerPointDocument:)), @"powerpoint"],
+        @[NSLocalizedString(@"Pages Document", nil), NSStringFromSelector(@selector(createNewPagesDocument:)), @"pages"],
+        @[NSLocalizedString(@"Numbers Spreadsheet", nil), NSStringFromSelector(@selector(createNewNumbersDocument:)), @"numbers"],
+        @[NSLocalizedString(@"Keynote Presentation", nil), NSStringFromSelector(@selector(createNewKeynoteDocument:)), @"keynote"],
+    ];
 
-    // Add "New Markdown File" to submenu
-    NSMenuItem *newMarkdownItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Markdown File", nil) action:@selector(createNewMarkdownFile:) keyEquivalent:@""];
-    NSImage *markdownIcon = [NSImage imageNamed:@"document"];
-    markdownIcon.template = YES;
-    newMarkdownItem.image = markdownIcon;
-    [submenu addItem:newMarkdownItem];
-
-    // Add "New Microsoft Word Document" to submenu
-    NSMenuItem *newWordItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Microsoft Word Document", nil) action:@selector(createNewWordDocument:) keyEquivalent:@""];
-    NSImage *wordIcon = [NSImage imageNamed:@"word"];
-    wordIcon.template = YES;
-    newWordItem.image = wordIcon;
-    [submenu addItem:newWordItem];
-
-    // Add "New Microsoft Excel Spreadsheet" to submenu
-    NSMenuItem *newExcelItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Microsoft Excel Spreadsheet", nil) action:@selector(createNewExcelDocument:) keyEquivalent:@""];
-    NSImage *excelIcon = [NSImage imageNamed:@"excel"];
-    excelIcon.template = YES;
-    newExcelItem.image = excelIcon;
-    [submenu addItem:newExcelItem];
-
-    // Add "New Microsoft PowerPoint Presentation" to submenu
-    NSMenuItem *newPowerPointItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Microsoft PowerPoint Presentation", nil) action:@selector(createNewPowerPointDocument:) keyEquivalent:@""];
-    NSImage *powerPointIcon = [NSImage imageNamed:@"powerpoint"];
-    powerPointIcon.template = YES;
-    newPowerPointItem.image = powerPointIcon;
-    [submenu addItem:newPowerPointItem];
-
-    // Add "New Pages Document" to submenu
-    NSMenuItem *newPagesItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Pages Document", nil) action:@selector(createNewPagesDocument:) keyEquivalent:@""];
-    NSImage *pagesIcon = [NSImage imageNamed:@"pages"];
-    pagesIcon.template = YES;
-    newPagesItem.image = pagesIcon;
-    [submenu addItem:newPagesItem];
-
-    // Add "New Numbers Spreadsheet" to submenu
-    NSMenuItem *newNumbersItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Numbers Spreadsheet", nil) action:@selector(createNewNumbersDocument:) keyEquivalent:@""];
-    NSImage *numbersIcon = [NSImage imageNamed:@"numbers"];
-    numbersIcon.template = YES;
-    newNumbersItem.image = numbersIcon;
-    [submenu addItem:newNumbersItem];
-
-    // Add "New Keynote Presentation" to submenu
-    NSMenuItem *newKeynoteItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Keynote Presentation", nil) action:@selector(createNewKeynoteDocument:) keyEquivalent:@""];
-    NSImage *keynoteIcon = [NSImage imageNamed:@"keynote"];
-    keynoteIcon.template = YES;
-    newKeynoteItem.image = keynoteIcon;
-    [submenu addItem:newKeynoteItem];
+    for (NSArray<NSString *> *fileType in fileTypes) {
+        NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:fileType[0]
+                                                     action:NSSelectorFromString(fileType[1])
+                                              keyEquivalent:@""];
+        item.target = self;
+        item.tag = menuKindTag;
+        item.enabled = YES;
+        NSImage *icon = [NSImage imageNamed:fileType[2]];
+        icon.template = YES;
+        item.image = icon;
+        [submenu addItem:item];
+    }
 
     // Add "New File" submenu
-    // The parent item keeps a nil action, like Finder's own submenu parents.
+    // A submenu parent must stay enabled while keeping a nil action, like
+    // Finder's own parent items: clicking it then does nothing and the menu
+    // stays open, instead of the click being handled as a dismissing action.
     NSMenuItem *mainItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"New File", nil) action:nil keyEquivalent:@""];
     NSImage *mainIcon = [NSImage imageNamed:@"add"];
     mainItem.image = mainIcon;
+    mainItem.enabled = YES;
     mainItem.submenu = submenu;
     [menu addItem:mainItem];
 
@@ -206,13 +183,10 @@
 }
 
 - (FIMenuKind)menuKindForSender:(id)sender {
+    // Only tag survives Finder's copy of the menu, so the menu kind is
+    // recovered from it. tag is biased by one because 0 is the default.
     if ([sender isKindOfClass:[NSMenuItem class]]) {
         NSMenuItem *item = (NSMenuItem *)sender;
-        id represented = item.representedObject;
-        if ([represented isKindOfClass:[NSNumber class]]) {
-            return (FIMenuKind)[represented unsignedIntegerValue];
-        }
-        // representedObject is not always preserved by the Finder host
         if (item.tag > 0) {
             return (FIMenuKind)(item.tag - 1);
         }
