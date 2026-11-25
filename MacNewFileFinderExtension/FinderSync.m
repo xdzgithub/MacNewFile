@@ -195,33 +195,37 @@
     // failures are diagnosable instead of silent.
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         NSString *fileName = fileURL.lastPathComponent;
-        NSString *escaped = [fileName stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
-        escaped = [escaped stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
 
+        // The sandboxed extension cannot read Finder's selection (err -1728),
+        // so polling is impossible; send the keystroke blind after giving the
+        // reveal time to land. Needs Automation/Accessibility permission.
         NSString *source = [NSString stringWithFormat:
-            @"tell application \"Finder\" to activate\n"
-            "set ok to false\n"
-            "repeat 20 times\n"
-            "  delay 0.15\n"
-            "  try\n"
-            "    if (name of item 1 of (get selection) as text) is \"%@\" then\n"
-            "      set ok to true\n"
-            "      exit repeat\n"
-            "    end if\n"
-            "  end try\n"
-            "end repeat\n"
-            "if not ok then return \"no-selection\"\n"
+            @"delay 1.0\n"
             "tell application \"System Events\" to keystroke return using shift down\n"
-            "return \"sent\"", escaped];
+            "return \"sent\""];
 
         NSAppleScript *script = [[NSAppleScript alloc] initWithSource:source];
         NSDictionary *errorDict = nil;
-        NSAppleEventDescriptor *result = [script executeAndReturnError:&errorDict];
+        [script executeAndReturnError:&errorDict];
+        NSString *debugOut;
         if (errorDict) {
             NSLog(@"Failed to start renaming (%@): %@",
                   [errorDict objectForKey:@"ErrorNumber"] ?: @"unknown", errorDict);
+            debugOut = [NSString stringWithFormat:@"[%@] target=%@ SCRIPT-ERROR: %@\n",
+                [[NSDate date] description], fileName,
+                [errorDict objectForKey:@"ErrorNumber"] ?: @"unknown"];
         } else {
-            NSLog(@"Rename keystroke: %@", result.stringValue);
+            debugOut = [NSString stringWithFormat:@"[%@] target=%@ KEYSENT\n",
+                [[NSDate date] description], fileName];
+        }
+        NSString *debugPath = @"/tmp/mnf-rename-debug.log";
+        NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:debugPath];
+        if (!fh) {
+            [debugOut writeToFile:debugPath atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+        } else {
+            [fh seekToEndOfFile];
+            [fh writeData:[debugOut dataUsingEncoding:NSUTF8StringEncoding]];
+            [fh closeFile];
         }
     });
 }
