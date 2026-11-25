@@ -187,46 +187,47 @@
 - (void)revealAndRenameURL:(NSURL *)fileURL {
     [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[fileURL]];
 
-    // The reveal is asynchronous, so poll until Finder actually reports the new
-    // file as selected before sending the keystroke; a fixed sleep raced the
-    // reveal and sent the keystroke into the void. The script needs
-    // Automation/Accessibility permission; without it the file stays selected
-    // and can be renamed manually. The result (or TCC error code) is logged so
-    // failures are diagnosable instead of silent.
+    // The sandboxed extension cannot read Finder's selection (err -1728), so
+    // polling is impossible; send the keystroke blind after giving the reveal
+    // time to land. Needs Automation/Accessibility permission; without it the
+    // file stays selected and can be renamed manually.
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        NSString *fileName = fileURL.lastPathComponent;
-
-        // The sandboxed extension cannot read Finder's selection (err -1728),
-        // so polling is impossible; send the keystroke blind after giving the
-        // reveal time to land. Needs Automation/Accessibility permission.
-        NSString *source = [NSString stringWithFormat:
+        NSString *source =
             @"delay 1.0\n"
             "tell application \"System Events\" to keystroke return using shift down\n"
-            "return \"sent\""];
+            "return \"sent\"";
 
         NSAppleScript *script = [[NSAppleScript alloc] initWithSource:source];
         NSDictionary *errorDict = nil;
         [script executeAndReturnError:&errorDict];
-        NSString *debugOut;
         if (errorDict) {
             NSLog(@"Failed to start renaming (%@): %@",
                   [errorDict objectForKey:@"ErrorNumber"] ?: @"unknown", errorDict);
-            debugOut = [NSString stringWithFormat:@"[%@] target=%@ SCRIPT-ERROR: %@\n",
-                [[NSDate date] description], fileName,
-                [errorDict objectForKey:@"ErrorNumber"] ?: @"unknown"];
-        } else {
-            debugOut = [NSString stringWithFormat:@"[%@] target=%@ KEYSENT\n",
-                [[NSDate date] description], fileName];
         }
-        NSString *debugPath = @"/tmp/mnf-rename-debug.log";
-        NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:debugPath];
-        if (!fh) {
-            [debugOut writeToFile:debugPath atomically:YES encoding:NSUTF8StringEncoding error:NULL];
-        } else {
-            [fh seekToEndOfFile];
-            [fh writeData:[debugOut dataUsingEncoding:NSUTF8StringEncoding]];
-            [fh closeFile];
-        }
+
+        // --- Debug probe: write the outcome to /tmp/mnf-rename-debug.log.
+        // Un comment when diagnosing rename failures (system log redacts NSLog
+        // values); the file lives in /tmp and the system clears it periodically.
+        // NSString *fileName = fileURL.lastPathComponent;
+        // NSString *debugOut;
+        // if (errorDict) {
+        //     debugOut = [NSString stringWithFormat:@"[%@] target=%@ SCRIPT-ERROR: %@\n",
+        //         [[NSDate date] description], fileName,
+        //         [errorDict objectForKey:@"ErrorNumber"] ?: @"unknown"];
+        // } else {
+        //     debugOut = [NSString stringWithFormat:@"[%@] target=%@ KEYSENT\n",
+        //         [[NSDate date] description], fileName];
+        // }
+        // NSString *debugPath = @"/tmp/mnf-rename-debug.log";
+        // NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:debugPath];
+        // if (!fh) {
+        //     [debugOut writeToFile:debugPath atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+        // } else {
+        //     [fh seekToEndOfFile];
+        //     [fh writeData:[debugOut dataUsingEncoding:NSUTF8StringEncoding]];
+        //     [fh closeFile];
+        // }
+        // --- End debug probe
     });
 }
 
