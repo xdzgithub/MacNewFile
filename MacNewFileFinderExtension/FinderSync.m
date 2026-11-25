@@ -11,6 +11,7 @@
 - (FIMenuKind)menuKindForSender:(id)sender;
 - (BOOL)menuKindRepresentsSelection:(FIMenuKind)kind;
 - (NSArray<NSString *> *)pathsForMenuKind:(FIMenuKind)kind;
+- (void)updateDirectoryURLs;
 @end
 
 @implementation FinderSync
@@ -18,43 +19,40 @@
 - (instancetype)init {
     self = [super init];
 
-    // Monitor root filesystem and all mounted volumes (including USB drives)
-    // Finder Sync extensions don't cross volume mount points, so we need to
-    // explicitly add each mounted volume to directoryURLs
-    // Note: iCloud Drive is not supported due to macOS Sonoma+ limitations
+    // Monitor root filesystem and all mounted volumes (including USB drives).
+    // Finder Sync extensions don't cross volume mount points, so each mounted
+    // volume has to be added explicitly.
+    // Note: iCloud Drive is not supported due to macOS Sonoma+ limitations.
     [self updateDirectoryURLs];
 
-    // Poll for volume changes every 3 seconds
-    // Neither NSWorkspace notifications nor GCD vnode watchers reliably
-    // detect volume mounts in Finder Sync extensions
-    _volumeTimerSource = dispatch_source_create(
-        DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
-
-    if (_volumeTimerSource) {
-        dispatch_source_set_timer(_volumeTimerSource,
-            dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC),
-            3 * NSEC_PER_SEC, 1 * NSEC_PER_SEC);
-
-        __weak typeof(self) weakSelf = self;
-        dispatch_source_set_event_handler(_volumeTimerSource, ^{
-            [weakSelf updateDirectoryURLs];
-        });
-        dispatch_resume(_volumeTimerSource);
+    // Volume mounts and unmounts are picked up from NSWorkspace notifications.
+    // There used to be a 3-second poll instead; reassigning directoryURLs makes
+    // Finder rebuild the extension's menus, so polling added nothing but
+    // needless menu teardown while a context menu was open.
+    NSNotificationCenter *workspaceCenter = [[NSWorkspace sharedWorkspace] notificationCenter];
+    for (NSString *name in @[NSWorkspaceDidMountNotification,
+                             NSWorkspaceDidUnmountNotification,
+                             NSWorkspaceDidRenameVolumeNotification]) {
+        [workspaceCenter addObserver:self
+                            selector:@selector(volumesDidChange:)
+                                name:name
+                              object:nil];
     }
 
     return self;
 }
 
 - (void)dealloc {
-    if (_volumeTimerSource) {
-        dispatch_source_cancel(_volumeTimerSource);
-        _volumeTimerSource = nil;
-    }
+    [[[NSWorkspace sharedWorkspace] notificationCenter] removeObserver:self];
+}
+
+- (void)volumesDidChange:(NSNotification *)notification {
+    [self updateDirectoryURLs];
 }
 
 - (void)updateDirectoryURLs {
     // Enumerate volumes off the main thread: the enumeration can block, and
-    // running it on the main queue every few seconds stalls menu building.
+    // running it on the main queue stalls menu building.
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
         NSMutableSet *urls = [NSMutableSet setWithObject:[NSURL fileURLWithPath:@"/"]];
 
@@ -68,8 +66,8 @@
 
         dispatch_async(dispatch_get_main_queue(), ^{
             // Reassigning directoryURLs makes Finder tear down and rebuild the
-            // extension's menus, which closes an open context menu (and its
-            // submenu). Only reassign when the volume set actually changed.
+            // extension's menus, which closes an open context menu and its
+            // submenu. Only reassign when the set actually changed.
             NSSet *current = [FIFinderSyncController defaultController].directoryURLs;
             if (current && [current isEqualToSet:urls]) {
                 return;
