@@ -53,17 +53,30 @@
 }
 
 - (void)updateDirectoryURLs {
-    NSMutableSet *urls = [NSMutableSet setWithObject:[NSURL fileURLWithPath:@"/"]];
+    // Enumerate volumes off the main thread: the enumeration can block, and
+    // running it on the main queue every few seconds stalls menu building.
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        NSMutableSet *urls = [NSMutableSet setWithObject:[NSURL fileURLWithPath:@"/"]];
 
-    // Add all mounted volumes (covers USB drives, external drives, etc.)
-    NSArray *volumeURLs = [[NSFileManager defaultManager]
-        mountedVolumeURLsIncludingResourceValuesForKeys:nil
-                                                options:NSVolumeEnumerationSkipHiddenVolumes];
-    for (NSURL *volumeURL in volumeURLs) {
-        [urls addObject:volumeURL];
-    }
+        // Add all mounted volumes (covers USB drives, external drives, etc.)
+        NSArray *volumeURLs = [[NSFileManager defaultManager]
+            mountedVolumeURLsIncludingResourceValuesForKeys:nil
+                                                    options:NSVolumeEnumerationSkipHiddenVolumes];
+        for (NSURL *volumeURL in volumeURLs) {
+            [urls addObject:volumeURL];
+        }
 
-    [FIFinderSyncController defaultController].directoryURLs = urls;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            // Reassigning directoryURLs makes Finder tear down and rebuild the
+            // extension's menus, which closes an open context menu (and its
+            // submenu). Only reassign when the volume set actually changed.
+            NSSet *current = [FIFinderSyncController defaultController].directoryURLs;
+            if (current && [current isEqualToSet:urls]) {
+                return;
+            }
+            [FIFinderSyncController defaultController].directoryURLs = urls;
+        });
+    });
 }
 
 #pragma mark - Primary Finder Sync protocol methods
@@ -182,11 +195,8 @@
     [submenu addItem:newKeynoteItem];
 
     // Add "New File" submenu
-    // Give the parent item a no-op action so clicking it does nothing while the
-    // submenu is still opening, instead of dismissing the whole context menu.
-    NSMenuItem *mainItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"New File", nil) action:@selector(newFileMenuClicked:) keyEquivalent:@""];
-    mainItem.target = self;
-    mainItem.enabled = YES;
+    // The parent item keeps a nil action, like Finder's own submenu parents.
+    NSMenuItem *mainItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"New File", nil) action:nil keyEquivalent:@""];
     NSImage *mainIcon = [NSImage imageNamed:@"add"];
     mainItem.image = mainIcon;
     mainItem.submenu = submenu;
@@ -208,12 +218,6 @@
         }
     }
     return FIMenuKindContextualMenuForContainer;
-}
-
-// No-op action for the "New File" parent item.
-// Clicking it should not dismiss the context menu or do anything else; the
-// submenu opens on hover.
-- (void)newFileMenuClicked:(id)sender {
 }
 
 // Whether the menu was opened on something the user selected, as opposed to
