@@ -16,3 +16,6 @@ xcuserdata/
 
 /assets/MacNewFile Demo sped up.mp4
 /assets/MacNewFile Demo.mp4
+
+# Build artifacts
+/dist/

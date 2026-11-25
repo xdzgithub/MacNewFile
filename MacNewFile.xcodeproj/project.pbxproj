@@ -63,11 +63,6 @@
 			path = MacNewFileFinderExtension;
 			sourceTree = "<group>";
 		};
-		DE67E29D2F27DFD800BFE7DF /* dist */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = dist;
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -94,7 +89,6 @@
 				DE67E26E2F26C1FD00BFE7DF /* MacNewFile */,
 				DE67E2862F26C23200BFE7DF /* MacNewFileFinderExtension */,
 				DE67E26D2F26C1FD00BFE7DF /* Products */,
-				DE67E29D2F27DFD800BFE7DF /* dist */,
 			);
 			sourceTree = "<group>";
 		};
@@ -126,7 +120,6 @@
 			);
 			fileSystemSynchronizedGroups = (
 				DE67E26E2F26C1FD00BFE7DF /* MacNewFile */,
-				DE67E29D2F27DFD800BFE7DF /* dist */,
 			);
 			name = MacNewFile;
 			packageProductDependencies = (
