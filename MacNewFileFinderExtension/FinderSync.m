@@ -122,75 +122,34 @@
     openTerminalItem.image = terminalIcon;
     [menu addItem:openTerminalItem];
 
-    // Create submenu for New File options
-    NSMenu *submenu = [[NSMenu alloc] initWithTitle:@""];
+    // New file entries live directly in the context menu. They used to be in a
+    // "New File" submenu, but Finder closes the whole menu when a submenu
+    // parent is clicked while the submenu is still appearing, and the click is
+    // handled by Finder itself so the extension cannot suppress it.
+    [menu addItem:[NSMenuItem separatorItem]];
 
-    // Add "New Text File" to submenu
-    NSMenuItem *newTextItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Text File", nil) action:@selector(createNewTextFile:) keyEquivalent:@""];
-    NSImage *textIcon = [NSImage imageNamed:@"edit"];
-    textIcon.template = YES;
-    newTextItem.image = textIcon;
-    [submenu addItem:newTextItem];
+    NSArray<NSArray<NSString *> *> *newFileItems = @[
+        @[NSLocalizedString(@"Text File", nil), NSStringFromSelector(@selector(createNewTextFile:)), @"edit"],
+        @[NSLocalizedString(@"Markdown File", nil), NSStringFromSelector(@selector(createNewMarkdownFile:)), @"document"],
+        @[NSLocalizedString(@"Microsoft Word Document", nil), NSStringFromSelector(@selector(createNewWordDocument:)), @"word"],
+        @[NSLocalizedString(@"Microsoft Excel Spreadsheet", nil), NSStringFromSelector(@selector(createNewExcelDocument:)), @"excel"],
+        @[NSLocalizedString(@"Microsoft PowerPoint Presentation", nil), NSStringFromSelector(@selector(createNewPowerPointDocument:)), @"powerpoint"],
+        @[NSLocalizedString(@"Pages Document", nil), NSStringFromSelector(@selector(createNewPagesDocument:)), @"pages"],
+        @[NSLocalizedString(@"Numbers Spreadsheet", nil), NSStringFromSelector(@selector(createNewNumbersDocument:)), @"numbers"],
+        @[NSLocalizedString(@"Keynote Presentation", nil), NSStringFromSelector(@selector(createNewKeynoteDocument:)), @"keynote"],
+    ];
 
-    // Add "New Markdown File" to submenu
-    NSMenuItem *newMarkdownItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Markdown File", nil) action:@selector(createNewMarkdownFile:) keyEquivalent:@""];
-    NSImage *markdownIcon = [NSImage imageNamed:@"document"];
-    markdownIcon.template = YES;
-    newMarkdownItem.image = markdownIcon;
-    [submenu addItem:newMarkdownItem];
-
-    // Add "New Microsoft Word Document" to submenu
-    NSMenuItem *newWordItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Microsoft Word Document", nil) action:@selector(createNewWordDocument:) keyEquivalent:@""];
-    NSImage *wordIcon = [NSImage imageNamed:@"word"];
-    wordIcon.template = YES;
-    newWordItem.image = wordIcon;
-    [submenu addItem:newWordItem];
-
-    // Add "New Microsoft Excel Spreadsheet" to submenu
-    NSMenuItem *newExcelItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Microsoft Excel Spreadsheet", nil) action:@selector(createNewExcelDocument:) keyEquivalent:@""];
-    NSImage *excelIcon = [NSImage imageNamed:@"excel"];
-    excelIcon.template = YES;
-    newExcelItem.image = excelIcon;
-    [submenu addItem:newExcelItem];
-
-    // Add "New Microsoft PowerPoint Presentation" to submenu
-    NSMenuItem *newPowerPointItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Microsoft PowerPoint Presentation", nil) action:@selector(createNewPowerPointDocument:) keyEquivalent:@""];
-    NSImage *powerPointIcon = [NSImage imageNamed:@"powerpoint"];
-    powerPointIcon.template = YES;
-    newPowerPointItem.image = powerPointIcon;
-    [submenu addItem:newPowerPointItem];
-
-    // Add "New Pages Document" to submenu
-    NSMenuItem *newPagesItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Pages Document", nil) action:@selector(createNewPagesDocument:) keyEquivalent:@""];
-    NSImage *pagesIcon = [NSImage imageNamed:@"pages"];
-    pagesIcon.template = YES;
-    newPagesItem.image = pagesIcon;
-    [submenu addItem:newPagesItem];
-
-    // Add "New Numbers Spreadsheet" to submenu
-    NSMenuItem *newNumbersItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Numbers Spreadsheet", nil) action:@selector(createNewNumbersDocument:) keyEquivalent:@""];
-    NSImage *numbersIcon = [NSImage imageNamed:@"numbers"];
-    numbersIcon.template = YES;
-    newNumbersItem.image = numbersIcon;
-    [submenu addItem:newNumbersItem];
-
-    // Add "New Keynote Presentation" to submenu
-    NSMenuItem *newKeynoteItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"Keynote Presentation", nil) action:@selector(createNewKeynoteDocument:) keyEquivalent:@""];
-    NSImage *keynoteIcon = [NSImage imageNamed:@"keynote"];
-    keynoteIcon.template = YES;
-    newKeynoteItem.image = keynoteIcon;
-    [submenu addItem:newKeynoteItem];
-
-    // Add "New File" submenu
-    // Give the parent item a no-op action so clicking it does nothing while the
-    // submenu is still opening, instead of dismissing the whole context menu.
-    NSMenuItem *mainItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"New File", nil) action:@selector(newFileMenuClicked:) keyEquivalent:@""];
-    mainItem.target = self;
-    mainItem.enabled = YES;
-    NSImage *mainIcon = [NSImage imageNamed:@"add"];
-    mainItem.image = mainIcon;
-    mainItem.submenu = submenu;
-    [menu addItem:mainItem];
+    for (NSArray<NSString *> *entry in newFileItems) {
+        NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:entry[0]
+                                                      action:NSSelectorFromString(entry[1])
+                                               keyEquivalent:@""];
+        item.representedObject = menuKind;
+        item.tag = menuKindTag;
+        NSImage *icon = [NSImage imageNamed:entry[2]];
+        icon.template = YES;
+        item.image = icon;
+        [menu addItem:item];
+    }
 
     return menu;
 }
@@ -208,12 +167,6 @@
         }
     }
     return FIMenuKindContextualMenuForContainer;
-}
-
-// No-op action for the "New File" parent item.
-// Clicking it should not dismiss the context menu or do anything else; the
-// submenu opens on hover.
-- (void)newFileMenuClicked:(id)sender {
 }
 
 // Whether the menu was opened on something the user selected, as opposed to
