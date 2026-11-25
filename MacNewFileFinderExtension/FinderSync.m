@@ -182,7 +182,11 @@
     [submenu addItem:newKeynoteItem];
 
     // Add "New File" submenu
-    NSMenuItem *mainItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"New File", nil) action:nil keyEquivalent:@""];
+    // Give the parent item a no-op action so clicking it does nothing while the
+    // submenu is still opening, instead of dismissing the whole context menu.
+    NSMenuItem *mainItem = [[NSMenuItem alloc] initWithTitle:NSLocalizedString(@"New File", nil) action:@selector(newFileMenuClicked:) keyEquivalent:@""];
+    mainItem.target = self;
+    mainItem.enabled = YES;
     NSImage *mainIcon = [NSImage imageNamed:@"add"];
     mainItem.image = mainIcon;
     mainItem.submenu = submenu;
@@ -204,6 +208,12 @@
         }
     }
     return FIMenuKindContextualMenuForContainer;
+}
+
+// No-op action for the "New File" parent item.
+// Clicking it should not dismiss the context menu or do anything else; the
+// submenu opens on hover.
+- (void)newFileMenuClicked:(id)sender {
 }
 
 // Whether the menu was opened on something the user selected, as opposed to
